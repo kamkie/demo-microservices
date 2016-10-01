@@ -16,21 +16,17 @@ plugins {
     id "com.gorylenko.gradle-git-properties" version "1.4.17"
     id "com.diffplug.gradle.spotless" version "2.0.0"
 }
-apply plugin: 'com.diffplug.gradle.spotless'
 
 allprojects {
     group 'net.devopssolutions'
     version gitVersion()
 
-    apply plugin: "io.spring.dependency-management"
-}
-
-subprojects {
     apply plugin: 'java'
     apply plugin: 'jacoco'
     apply plugin: 'pmd'
     apply plugin: 'findbugs'
     apply plugin: 'com.diffplug.gradle.spotless'
+    apply plugin: "io.spring.dependency-management"
 
     sourceCompatibility = 1.8
     targetCompatibility = 1.8
@@ -41,20 +37,13 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom 'io.spring.platform:platform-bom:2.0.8.RELEASE'
+            mavenBom 'io.spring.platform:platform-bom:Athens-RELEASE'
             mavenBom "org.springframework.cloud:spring-cloud-dependencies:Camden.RELEASE"
         }
     }
 
     configurations {
         compile.exclude module: "spring-boot-starter-tomcat"
-    }
-
-    dependencies {
-        compile('org.projectlombok:lombok')
-        compile('org.springframework.boot:spring-boot-starter')
-
-        testCompile('org.springframework.boot:spring-boot-starter-test')
     }
 
     compileJava {
@@ -66,30 +55,23 @@ subprojects {
         options.encoding = 'UTF-8'
         options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
     }
+}
 
-    spotless {
-        java {
-            eclipseFormatFile "${rootDir}/spotless.eclipseformat.xml"    // XML file dumped out by the Eclipse formatter
-            indentWithSpaces()
-            trimTrailingWhitespace()
-            endWithNewline()
+subprojects {
+    dependencies {
+        compile('org.projectlombok:lombok')
+//        compile('org.springframework.boot:spring-boot-starter')
 
-            // Eclipse formatter puts excess whitespace after lambda blocks
-            //    funcThatTakesLambdas(x -> {} , y -> {} )	// what Eclipse does
-            //    funcThatTakesLambdas(x -> {}, y -> {})	// what I wish Eclipse did
-            custom 'Lambda fix', { it.replace('} )', '})').replace('} ,', '},') }
+        testCompile('org.springframework.boot:spring-boot-starter-test')
+    }
+}
 
-            // Eclipse formatter screws up long literals with underscores inside of annotations (see issue #14)
-            //    @Max(value = 9_999_999 L) // what Eclipse does
-            //    @Max(value = 9_999_999L)  // what I wish Eclipse did
-            custom 'Long literal fix', { it.replaceAll('([0-9_]+) [Ll]', '$1L') }
-        }
-        format 'misc', {
-            target '**/.gitignore', '**/*.gradle', '**/*.md', '**/*.sh', '**/*.bat', '**/*.yaml', '**/*.yml'
-            indentWithSpaces()
-            trimTrailingWhitespace()
-            endWithNewline()
-        }
+project(':common-filters') {
+    dependencies {
+        compile('org.slf4j:slf4j-api')
+        compile('org.springframework.boot:spring-boot-autoconfigure')
+        compile('org.springframework:spring-web')
+        compile('javax.servlet:javax.servlet-api')
     }
 }
 
@@ -158,14 +140,24 @@ configure(subprojects.findAll { it.name.contains('service-') }) {
     }
     processResources.dependsOn << buildInfoProperties
 }
-project(':common-filters') {
-    dependencies {
-        compile('org.springframework.boot:spring-boot-starter-web')
-        compile('org.springframework.boot:spring-boot-starter-undertow')
-    }
-}
 
 spotless {
+    java {
+        eclipseFormatFile "${rootDir}/spotless.eclipseformat.xml"    // XML file dumped out by the Eclipse formatter
+        indentWithSpaces()
+        trimTrailingWhitespace()
+        endWithNewline()
+
+        // Eclipse formatter puts excess whitespace after lambda blocks
+        //    funcThatTakesLambdas(x -> {} , y -> {} )	// what Eclipse does
+        //    funcThatTakesLambdas(x -> {}, y -> {})	// what I wish Eclipse did
+        custom 'Lambda fix', { it.replace('} )', '})').replace('} ,', '},') }
+
+        // Eclipse formatter screws up long literals with underscores inside of annotations (see issue #14)
+        //    @Max(value = 9_999_999 L) // what Eclipse does
+        //    @Max(value = 9_999_999L)  // what I wish Eclipse did
+        custom 'Long literal fix', { it.replaceAll('([0-9_]+) [Ll]', '$1L') }
+    }
     format 'misc', {
         target '**/.gitignore', '**/*.gradle', '**/*.md', '**/*.sh', '**/*.bat', '**/*.yaml', '**/*.yml'
         indentWithSpaces()
