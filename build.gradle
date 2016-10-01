@@ -16,6 +16,9 @@ plugins {
     id "com.gorylenko.gradle-git-properties" version "1.4.17"
     id "com.diffplug.gradle.spotless" version "2.0.0"
 }
+apply plugin: 'java'
+apply plugin: 'org.sonarqube'
+
 
 allprojects {
     group 'net.devopssolutions'
@@ -63,6 +66,12 @@ subprojects {
 //        compile('org.springframework.boot:spring-boot-starter')
 
         testCompile('org.springframework.boot:spring-boot-starter-test')
+    }
+
+    sonarqube {
+        properties {
+            property "sonar.jacoco.reportPath", "${rootProject.buildDir}/jacoco/jacocoMerge.exec"
+        }
     }
 }
 
@@ -166,15 +175,46 @@ spotless {
     }
 }
 
+task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
+    dependsOn = subprojects.test
+    additionalSourceDirs = files(subprojects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories = files(subprojects.sourceSets.main.allSource.srcDirs)
+    classDirectories = files(subprojects.sourceSets.main.output)
+    executionData = files(subprojects.jacocoTestReport.executionData)
+    reports {
+        html.enabled = true
+        xml.enabled = true
+        csv.enabled = false
+    }
+    onlyIf = {
+        true
+    }
+    doFirst {
+        executionData = files(executionData.findAll {
+            it.exists()
+        })
+    }
+}
+
 sonarqube {
     properties {
         property "sonar.host.url", "http://192.168.99.100:32768"
         property "sonar.projectName", "${project.name}"
         property "sonar.projectKey", "${project.group}:${project.name}"
-        property "sonar.jacoco.reportPath", "${project.buildDir}/jacoco/test.exec"
-        property "sonar.exclusions", ""
+        property "sonar.jacoco.reportPath", "${rootProject.buildDir}/jacoco/jacocoMerge.exec"
     }
 }
+
+task jacocoMerge(type: JacocoMerge) {
+    subprojects.each { subproject ->
+        executionData subproject.tasks.withType(Test).each {
+            def execFile = new File(subproject.buildDir, "jacoco/${it.name}.exec")
+            execFile.parentFile.mkdirs()
+            execFile.createNewFile()
+        }
+    }
+}
+project.tasks.sonarqube.dependsOn << jacocoMerge
 
 task wrapper(type: Wrapper) {
     gradleVersion = '3.1'
