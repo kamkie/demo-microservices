@@ -12,54 +12,143 @@ buildscript {
 
 plugins {
     id 'com.palantir.git-version' version '0.5.2'
+    id "org.sonarqube" version "2.1"
+    id "com.gorylenko.gradle-git-properties" version "1.4.17"
+    id "com.diffplug.gradle.spotless" version "2.0.0"
 }
 
-apply plugin: 'java'
-apply plugin: 'spring-boot'
+allprojects {
+    group 'net.devopssolutions'
+    version gitVersion()
 
-version = gitVersion()
-jar {
-    baseName = 'demo-microservices'
-}
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
-
-repositories {
-    mavenCentral()
+    apply plugin: "io.spring.dependency-management"
 }
 
-dependencyManagement {
-    imports {
-        mavenBom "org.springframework.cloud:spring-cloud-dependencies:Camden.RELEASE"
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'spring-boot'
+    apply plugin: 'jacoco'
+    apply plugin: 'pmd'
+    apply plugin: 'findbugs'
+    apply plugin: 'com.gorylenko.gradle-git-properties'
+    apply plugin: 'com.diffplug.gradle.spotless'
+
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.cloud:spring-cloud-dependencies:Camden.RELEASE"
+        }
+    }
+
+    dependencies {
+        compile('org.springframework.boot:spring-boot-starter-actuator')
+//        compile('org.springframework.boot:spring-boot-starter-aop')
+//        compile('org.springframework.boot:spring-boot-starter-cache')
+//        compile('org.springframework.cloud:spring-cloud-starter-bus-kafka')
+//        compile('org.springframework.cloud:spring-cloud-starter-config')
+//        compile('org.springframework.cloud:spring-cloud-starter-eureka')
+//        compile('org.springframework.cloud:spring-cloud-starter-hystrix')
+//        compile('org.springframework.cloud:spring-cloud-starter-ribbon')
+//        compile('org.springframework.cloud:spring-cloud-starter')
+//        compile('org.springframework.cloud:spring-cloud-starter-zipkin')
+//        compile('org.springframework.cloud:spring-cloud-starter-stream-kafka')
+//        compile('org.springframework.boot:spring-boot-starter-data-rest')
+//        compile('org.springframework.boot:spring-boot-devtools')
+//        compile('org.projectlombok:lombok')
+//        compile('org.springframework.retry:spring-retry')
+//        compile('org.springframework.boot:spring-boot-starter-security')
+//        compile('org.springframework.session:spring-session')
+//        compile('org.springframework.boot:spring-boot-starter-thymeleaf')
+        compile('org.springframework.boot:spring-boot-starter-web')
+//        compile('org.springframework.boot:spring-boot-starter-websocket')
+
+        runtime('com.h2database:h2')
+
+        testCompile('org.springframework.boot:spring-boot-starter-test')
+        testCompile('org.springframework.restdocs:spring-restdocs-mockmvc')
+    }
+
+    bootRun {
+        addResources = true
+    }
+
+    compileJava {
+        options.encoding = 'UTF-8'
+        options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+    }
+
+    compileTestJava {
+        options.encoding = 'UTF-8'
+        options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+    }
+
+    task buildInfoProperties << {
+        def file = new File(project.buildDir, 'resources/main/META-INF/build-info.properties')
+        if (!file.parentFile.exists()) {
+            file.parentFile.mkdirs()
+        }
+        if (file.exists()) {
+            assert file.delete()
+        }
+        assert file.createNewFile()
+        logger.info "writing to [${file}]"
+        def map = [
+                "build.version"            : version,
+                "build.spring.boot.version": springBootVersion,
+                "build.artifact"           : project.name,
+                "build.group"              : project.group,
+                "build.name"               : rootProject.name,
+                "build.time"               : new Date().time,
+        ]
+
+        file.withWriter('UTF-8') { w ->
+            map.each { key, value ->
+                w.writeLine "$key=$value"
+            }
+        }
+    }
+    processResources.dependsOn << buildInfoProperties
+
+    spotless {
+        java {
+            eclipseFormatFile "${rootDir}/spotless.eclipseformat.xml"    // XML file dumped out by the Eclipse formatter
+            indentWithSpaces()
+            trimTrailingWhitespace()
+            endWithNewline()
+
+            // Eclipse formatter puts excess whitespace after lambda blocks
+            //    funcThatTakesLambdas(x -> {} , y -> {} )	// what Eclipse does
+            //    funcThatTakesLambdas(x -> {}, y -> {})	// what I wish Eclipse did
+            custom 'Lambda fix', { it.replace('} )', '})').replace('} ,', '},') }
+
+            // Eclipse formatter screws up long literals with underscores inside of annotations (see issue #14)
+            //    @Max(value = 9_999_999 L) // what Eclipse does
+            //    @Max(value = 9_999_999L)  // what I wish Eclipse did
+            custom 'Long literal fix', { it.replaceAll('([0-9_]+) [Ll]', '$1L') }
+        }
+        format 'misc', {
+            target '**/.gitignore', '**/*.gradle', '**/*.md', '**/*.sh'
+            indentWithSpaces()
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
     }
 }
 
-dependencies {
-    compile('org.springframework.boot:spring-boot-starter-actuator')
-    compile('org.springframework.boot:spring-boot-starter-aop')
-    compile('org.springframework.boot:spring-boot-starter-cache')
-    compile('org.springframework.cloud:spring-cloud-starter-bus-kafka')
-    compile('org.springframework.cloud:spring-cloud-starter-config')
-    compile('org.springframework.cloud:spring-cloud-starter-eureka')
-    compile('org.springframework.cloud:spring-cloud-starter-hystrix')
-    compile('org.springframework.cloud:spring-cloud-starter-ribbon')
-    compile('org.springframework.cloud:spring-cloud-starter')
-    compile('org.springframework.cloud:spring-cloud-starter-zipkin')
-    compile('org.springframework.cloud:spring-cloud-starter-stream-kafka')
-    compile('org.springframework.boot:spring-boot-starter-data-rest')
-    compile('org.springframework.boot:spring-boot-devtools')
-    compile('org.projectlombok:lombok')
-    compile('org.springframework.retry:spring-retry')
-    compile('org.springframework.boot:spring-boot-starter-security')
-    compile('org.springframework.session:spring-session')
-    compile('org.springframework.boot:spring-boot-starter-thymeleaf')
-    compile('org.springframework.boot:spring-boot-starter-web')
-    compile('org.springframework.boot:spring-boot-starter-websocket')
-
-    runtime('com.h2database:h2')
-
-    testCompile('org.springframework.boot:spring-boot-starter-test')
-    testCompile('org.springframework.restdocs:spring-restdocs-mockmvc')
+sonarqube {
+    properties {
+        property "sonar.host.url", "http://192.168.99.100:32768"
+        property "sonar.projectName", "${project.name}"
+        property "sonar.projectKey", "${project.group}:${project.name}"
+        property "sonar.jacoco.reportPath", "${project.buildDir}/jacoco/test.exec"
+        property "sonar.exclusions", ""
+    }
 }
 
 task wrapper(type: Wrapper) {
